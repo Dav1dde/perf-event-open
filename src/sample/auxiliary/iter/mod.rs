@@ -1,5 +1,7 @@
 use std::io::Result;
 use std::num::NonZeroUsize;
+use std::pin::Pin;
+use std::task::{Context, Poll};
 
 mod cow;
 
@@ -32,6 +34,20 @@ impl<'a> Iter<'a> {
 pub struct AsyncIter<'a>(AsyncCowIter<'a>);
 
 impl AsyncIter<'_> {
+    /// Attempt to pull out the next value, registering the current task for wakeup if the value is
+    /// not yet available, and returning `None` if the iterator is exhausted.
+    ///
+    /// `max_chunk_len` specifies the maximum length of a chunk
+    /// that can be produced at one time, unlimited if `None`.
+    pub fn poll_next(
+        self: Pin<&mut Self>,
+        max_chunk_len: Option<NonZeroUsize>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Option<Vec<u8>>> {
+        let this = std::pin::Pin::new(&mut self.get_mut().0);
+        this.poll_next(|cc| cc.into_owned(), max_chunk_len, cx)
+    }
+
     /// Advances the iterator and returns the next value.
     ///
     /// `max_chunk_len` specifies the maximum length of a chunk

@@ -1,4 +1,6 @@
 use std::io::Result;
+use std::pin::Pin;
+use std::task::{Context, Poll};
 
 use super::record::{Priv, Record};
 
@@ -33,6 +35,15 @@ impl Iterator for Iter<'_> {
 pub struct AsyncIter<'a>(AsyncCowIter<'a>);
 
 impl AsyncIter<'_> {
+    /// Attempt to pull out the next value, registering the current task for wakeup if the value is
+    /// not yet available, and returning `None` if the iterator is exhausted.
+    ///
+    /// [`WakeUpOn`][crate::config::WakeUpOn] must be properly set to make this work.
+    pub fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<(Priv, Record)>> {
+        let this = std::pin::Pin::new(&mut self.get_mut().0);
+        this.poll_next(|cc, p| p.parse(cc), cx)
+    }
+
     /// Advances the iterator and returns the next value.
     ///
     /// [`WakeUpOn`][crate::config::WakeUpOn] must be properly set to make this work.
